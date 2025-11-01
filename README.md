@@ -1,6 +1,6 @@
 ## Contextual Personal Assistant
 <p align="center">
-      <img src="Image/Screenshot 2025-11-01 010830.png" alt="App Screenshot" width="700" />
+      <img src="Image\Screenshot 2025-11-01 170435.png" alt="App Screenshot" width="700" />
 </p>
 This project is a sophisticated personal assistant system designed to transform unstructured text notes into organized, actionable knowledge using advanced AI agents. The assistant automatically processes your notes, extracts key information, and organizes it for easy access and proactive insights.
 
