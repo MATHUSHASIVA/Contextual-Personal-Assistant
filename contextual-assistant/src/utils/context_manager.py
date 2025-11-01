@@ -6,16 +6,12 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
-import logging
 from collections import defaultdict, Counter
 
 from ..storage.database import DatabaseManager, UserContext, Card, Envelope, Keyword
 from ..models.schemas import (
     UserContextCreate, UserContextResponse, ContextType
 )
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 class ContextManager:
     """
@@ -140,7 +136,6 @@ class ContextManager:
             
         except Exception as e:
             session.rollback()
-            logger.error(f"Error updating context from card: {e}")
             raise
         finally:
             session.close()
@@ -212,7 +207,6 @@ class ContextManager:
             
         except Exception as e:
             session.rollback()
-            logger.error(f"Error refreshing context relevance: {e}")
             raise
         finally:
             session.close()
@@ -285,7 +279,6 @@ class ContextManager:
             
         except Exception as e:
             session.rollback()
-            logger.error(f"Error creating context: {e}")
             raise
         finally:
             session.close()
@@ -717,7 +710,6 @@ class ContextManager:
             }
             
         except Exception as e:
-            logger.error(f"Error analyzing context evolution: {e}")
             return {
                 "total_contexts": 0,
                 "contexts_by_type": {

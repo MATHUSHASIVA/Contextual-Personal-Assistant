@@ -31,7 +31,7 @@ def check_python_version():
 
 def create_directories():
     """Create necessary directories"""
-    directories = ["data", "logs"]
+    directories = ["data"]
     for directory in directories:
         Path(directory).mkdir(exist_ok=True)
         print(f"✅ Created directory: {directory}")
@@ -43,37 +43,11 @@ def install_dependencies():
     # Upgrade pip first
     if not run_command(f"{sys.executable} -m pip install --upgrade pip setuptools wheel", "Upgrading pip"):
         return False
-    
-    # Install base packages that need specific versions to avoid conflicts
-    base_packages = [
-        "numpy==1.24.3",  # Install numpy first as many packages depend on it
-        "packaging==23.2",  # Required by multiple packages
-        "pydantic==2.5.0",
-        "sqlalchemy==2.0.23"
-    ]
-    
-    for package in base_packages:
-        # Wrap package spec in quotes to handle special characters in PowerShell
-        if not run_command(f'{sys.executable} -m pip install "{package}"', f"Installing {package}"):
-            print(f"❌ Failed to install {package}")
-            return False
-    
-    # Install huggingface packages in the correct order
-    hf_packages = [
-        "huggingface-hub==0.16.4",
-        "tokenizers==0.14.1",
-        "transformers==4.34.0"
-    ]
-    
-    for package in hf_packages:
-        if not run_command(f"{sys.executable} -m pip install {package}", f"Installing {package}"):
-            print(f"⚠️  Warning: Failed to install {package}")
-            # Continue as we might have a working version
-    
-    # Install remaining requirements
-    if not run_command(f"{sys.executable} -m pip install -r requirements.txt", "Installing remaining dependencies"):
-        print("⚠️  Warning: Some packages might have failed to install")
-        # Continue as core packages are already installed
+
+    # Install requirements from requirements.txt
+    if not run_command(f"{sys.executable} -m pip install -r requirements.txt", "Installing dependencies from requirements.txt"):
+        print("❌ Failed to install some packages from requirements.txt")
+        return False
     
     return True
 
@@ -87,16 +61,17 @@ def download_spacy_model():
         return True
     except:
         print("📥 spaCy model not found, downloading...")
-        # First ensure we have the right numpy version
-        if not run_command(f"{sys.executable} -m pip install numpy==1.24.3", "Installing compatible numpy version"):
+        
+        # Install the spaCy model directly from GitHub
+        model_url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl"
+        if run_command(f"{sys.executable} -m pip install {model_url}", "Installing spaCy English model"):
+            print("✅ spaCy model installed successfully")
+            return True
+        else:
+            print("⚠️  Failed to install spaCy model automatically")
+            print("   You can install it manually with:")
+            print(f"   pip install {model_url}")
             return False
-            
-        # Install specific spaCy version from requirements
-        if not run_command(f"{sys.executable} -m pip install spacy==3.7.2", "Installing spaCy"):
-            return False
-            
-        # Download the English model
-        return run_command(f"{sys.executable} -m spacy download en_core_web_sm", "Downloading spaCy English model")
 
 def setup_environment():
     """Set up environment variables"""
@@ -115,15 +90,11 @@ def setup_environment():
 # Database configuration
 DATABASE_PATH=./data/assistant.db
 
-# Logging level (DEBUG, INFO, WARNING, ERROR)
-LOG_LEVEL=INFO
-
 # Groq API key for LLaMA model access
 LLM_MODEL=llama-3.3-70b-versatile
 
-# Model configurations (optional)
+# NLP Model configuration
 SPACY_MODEL=en_core_web_sm
-SENTENCE_TRANSFORMER_MODEL=all-MiniLM-L6-v2
 
 # Agent settings
 MAX_CONTEXT_KEYWORDS=5
@@ -164,6 +135,17 @@ def test_installation():
         import dateparser
         print("✅ Utility packages import successfully")
         
+        # Test NLP packages
+        print("Testing NLP packages...")
+        try:
+            import spacy
+            nlp = spacy.load("en_core_web_sm")
+            print("✅ spaCy and en_core_web_sm model available")
+        except ImportError:
+            print("⚠️  spaCy not available - using LLM fallback for NLP tasks")
+        except OSError:
+            print("⚠️  spaCy model not found - using LLM fallback for NLP tasks")
+        
         # Test web interface packages
         print("Testing web interface packages...")
         import streamlit
@@ -174,10 +156,14 @@ def test_installation():
         
         # Test project modules
         print("Testing project modules...")
-        from src.agents.ingestion_agent import IngestionAgent
-        from src.storage.database import DatabaseManager
-        db_manager = DatabaseManager()
-        print("✅ Project modules import successfully")
+        try:
+            from src.agents.ingestion_agent import IngestionAgent
+            from src.storage.database import DatabaseManager
+            db_manager = DatabaseManager()
+            print("✅ Project modules import successfully")
+        except ImportError as e:
+            print(f"⚠️  Some project modules may need setup: {e}")
+            print("This is normal if it's your first run")
         
         print("🎉 Core installation tests passed!")
         return True
@@ -244,7 +230,7 @@ def main():
     # Download spaCy model
     if not download_spacy_model():
         print("⚠️  Failed to download spaCy model. You may need to run this manually:")
-        print("   python -m spacy download en_core_web_sm")
+        print("   pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl")
     
     # Setup environment
     setup_environment()

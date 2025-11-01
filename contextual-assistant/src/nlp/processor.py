@@ -7,8 +7,18 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import dateparser
 import numpy as np
-import logging
 from dataclasses import dataclass
+import spacy
+
+# ML imports - with try-except for optional dependencies  
+try:
+    from sentence_transformers import SentenceTransformer
+    from sklearn.metrics.pairwise import cosine_similarity
+    ML_AVAILABLE = True
+except ImportError:
+    ML_AVAILABLE = False
+    SentenceTransformer = None
+    cosine_similarity = None
 
 # Optional fuzzy matching imports
 try:
@@ -19,31 +29,6 @@ except (ImportError, ValueError):
     fuzz = None
     process = None
 
-# Disable spaCy imports for now due to dependency conflicts
-SPACY_AVAILABLE = False
-spacy = None
-
-# try:
-#     import spacy
-#     SPACY_AVAILABLE = True
-# except ImportError:
-#     SPACY_AVAILABLE = False
-#     spacy = None
-
-# Disable ML imports for now due to dependency conflicts
-ML_AVAILABLE = False
-SentenceTransformer = None
-cosine_similarity = None
-
-# try:
-#     from sentence_transformers import SentenceTransformer
-#     from sklearn.metrics.pairwise import cosine_similarity
-#     ML_AVAILABLE = True
-# except ImportError:
-#     ML_AVAILABLE = False
-#     SentenceTransformer = None
-#     cosine_similarity = None
-
 from ..models.schemas import (
     EntityExtractionResult, 
     ClassificationResult, 
@@ -51,9 +36,6 @@ from ..models.schemas import (
     EnvelopeMatchResult,
     EnvelopeType
 )
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 @dataclass
 class NLPConfig:
@@ -77,10 +59,7 @@ class EntityExtractor:
         """Load spaCy model"""
         try:
             self.nlp = spacy.load(self.config.spacy_model)
-            logger.info(f"Loaded spaCy model: {self.config.spacy_model}")
         except OSError:
-            logger.error(f"Could not load spaCy model: {self.config.spacy_model}")
-            logger.info("Please install it with: python -m spacy download en_core_web_sm")
             raise
     
     def extract_entities(self, text: str) -> EntityExtractionResult:
@@ -191,7 +170,6 @@ class EntityExtractor:
             
             return parsed
         except Exception as e:
-            logger.debug(f"Could not parse date '{date_text}': {e}")
             return None
     
     def _extract_dates_with_dateparser(self, text: str) -> List[datetime]:
@@ -351,9 +329,7 @@ class EnvelopeMatcher:
         """Load sentence transformer model"""
         try:
             self.sentence_model = SentenceTransformer(self.config.sentence_transformer_model)
-            logger.info(f"Loaded sentence transformer: {self.config.sentence_transformer_model}")
         except Exception as e:
-            logger.error(f"Could not load sentence transformer: {e}")
             # Fallback to keyword-based matching
             self.sentence_model = None
     
@@ -459,7 +435,7 @@ class EnvelopeMatcher:
             return self._suggest_new_envelope(text, entities)
     
     def _suggest_new_envelope(self, text: str, entities: EntityExtractionResult) -> EnvelopeMatchResult:
-        """Suggest creating a new envelope"""
+        """Suggest creating a new envelope based on note content"""
         
         # Determine envelope type and name based on entities
         suggested_name = None
@@ -476,15 +452,32 @@ class EnvelopeMatcher:
             suggested_type = EnvelopeType.COMPANY
         
         # Use keywords for theme-based envelopes
-        elif entities.keywords:
-            # Use the most important keyword
-            suggested_name = entities.keywords[0].title()
+        elif entities.keywords and len(entities.keywords) > 0:
+            # Combine top 2-3 keywords for more descriptive name
+            num_keywords = min(2, len(entities.keywords))
+            suggested_name = " ".join([kw.title() for kw in entities.keywords[:num_keywords]])
             suggested_type = EnvelopeType.THEME
         
-        # Fallback to first few words of text
+        # Fallback: Extract meaningful words from text (nouns, verbs)
         else:
-            words = text.split()[:3]
-            suggested_name = " ".join(words).title()
+            words = []
+            # Remove common stop words and short words
+            stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'my', 'your', 'his', 'her', 'its', 'our', 'their'}
+            text_words = text.lower().split()
+            
+            for word in text_words:
+                # Clean word
+                clean_word = re.sub(r'[^\w]', '', word)
+                if clean_word and len(clean_word) > 2 and clean_word not in stop_words:
+                    words.append(clean_word.title())
+                if len(words) >= 3:
+                    break
+            
+            if words:
+                suggested_name = " ".join(words)
+            else:
+                # Last resort: use first 3-4 words
+                suggested_name = " ".join(text.split()[:3]).title()
         
         return EnvelopeMatchResult(
             matched_envelope=None,
@@ -502,18 +495,11 @@ class NLPPipeline:
     def __init__(self, config: NLPConfig = None):
         self.config = config or NLPConfig()
         
-        # Initialize components with fallback handling
-        if SPACY_AVAILABLE and ML_AVAILABLE:
-            self.entity_extractor = EntityExtractor(self.config)
-            self.card_classifier = CardClassifier(self.config)
-            self.envelope_matcher = EnvelopeMatcher(self.config)
-            self.available = True
-        else:
-            logging.warning("SpaCy or ML dependencies not available. NLP pipeline will use fallback mode.")
-            self.entity_extractor = None
-            self.card_classifier = None
-            self.envelope_matcher = None
-            self.available = False
+        # Initialize components (spaCy is always available)
+        self.entity_extractor = EntityExtractor(self.config)
+        self.card_classifier = CardClassifier(self.config)
+        self.envelope_matcher = EnvelopeMatcher(self.config)
+        self.available = True
     
     def process(
         self, 
@@ -553,7 +539,6 @@ class NLPPipeline:
             
         except Exception as e:
             processing_time = (datetime.now() - start_time).total_seconds() * 1000
-            logger.error(f"NLP pipeline error: {e}", exc_info=True)
             
             return {
                 "success": False,
@@ -568,13 +553,17 @@ class NLPPipeline:
         from ..models.schemas import EntityExtractionResult, ClassificationResult, EnvelopeMatchResult, CardType, EnvelopeType
         
         # Simple entity extraction using regex
+        # Extract meaningful keywords (remove stop words)
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'i', 'you', 'he', 'she', 'it', 'we', 'they'}
+        keywords = [word.lower() for word in text.split() if len(word) > 2 and word.lower() not in stop_words][:5]
+        
         entities = EntityExtractionResult(
             people=[],
             organizations=[],
             locations=[],
             dates=[],
-            keywords=text.lower().split()[:5],  # Simple keyword extraction
-            entities=[]
+            keywords=keywords,
+            entities={}
         )
         
         # Simple classification based on keywords
@@ -589,18 +578,30 @@ class NLPPipeline:
         
         classification = ClassificationResult(
             predicted_type=card_type,
-            confidence=0.7,
             reasoning="Fallback classification based on simple keyword matching"
         )
+        
+        # Generate meaningful envelope name from keywords
+        if keywords:
+            suggested_name = " ".join([kw.title() for kw in keywords[:2]])
+        else:
+            # Extract first meaningful words
+            words = []
+            for word in text.split():
+                clean_word = re.sub(r'[^\w]', '', word)
+                if clean_word and len(clean_word) > 2 and clean_word.lower() not in stop_words:
+                    words.append(clean_word.title())
+                if len(words) >= 2:
+                    break
+            suggested_name = " ".join(words) if words else " ".join(text.split()[:3]).title()
         
         # Simple envelope matching
         envelope_match = EnvelopeMatchResult(
             matched_envelope=None,
+            similarity_score=0.5,
             should_create_new=True,
-            suggested_name="General",
-            suggested_type=EnvelopeType.GENERAL,
-            confidence=0.5,
-            reasoning="Fallback envelope creation"
+            suggested_name=suggested_name,
+            suggested_type=EnvelopeType.THEME
         )
         
         return {

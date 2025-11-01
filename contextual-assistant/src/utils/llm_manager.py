@@ -5,24 +5,21 @@ LLM integration module using Groq's Llama model
 import os
 import re
 import json
-from typing import List, Dict, Any, Optional
-import logging
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from dataclasses import dataclass
 
 # Optional LLM imports
+if TYPE_CHECKING:
+    from langchain.callbacks.manager import CallbackManagerForLLMRun
+
 try:
     from langchain_groq import ChatGroq
     from langchain.llms.base import LLM
-    from langchain.callbacks.manager import CallbackManagerForLLMRun
     LLM_AVAILABLE = True
 except ImportError:
     LLM_AVAILABLE = False
     ChatGroq = None
     LLM = None
-    CallbackManagerForLLMRun = None
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 @dataclass
 class LLMConfig:
@@ -54,7 +51,6 @@ class LLMManager:
             self._setup_client()
         else:
             self.client = None
-            logger.warning("LLM dependencies not available. LLM functionality disabled.")
         
     def _setup_client(self):
         """Initialize Groq Chat client"""
@@ -103,8 +99,6 @@ class LLMManager:
                     raise ValueError("Test response missing required fields")
             except Exception as e:
                 raise ConnectionError(f"LLM response validation failed: {str(e)}")
-                
-            logger.info(f"LLM initialized successfully with model: {self.config.model}")
             
         except Exception as e:
             raise RuntimeError(f"Failed to initialize LLM: {str(e)}")
@@ -118,7 +112,7 @@ class LLMManager:
         self,
         prompt: str,
         stop: Optional[List[str]] = None,
-        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        run_manager: Optional['CallbackManagerForLLMRun'] = None,
         **kwargs: Any,
     ) -> str:
         """Execute the LLM call."""
@@ -133,7 +127,6 @@ class LLMManager:
             else:
                 return str(response)
         except Exception as e:
-            logger.error(f"LLM call failed: {str(e)}")
             raise
     
     def generate_response(self, 
@@ -170,7 +163,6 @@ class LLMManager:
                 return str(response)
             
         except Exception as e:
-            logger.error(f"LLM generation failed: {str(e)}")
             return None
     
     def process_note(self, text: str, current_envelopes: List[Dict] = None, user_context: Dict = None) -> Dict[str, Any]:
@@ -345,8 +337,6 @@ Return EXACTLY this structure on a SINGLE LINE (no line breaks, no spaces after 
             response = response.replace(' "', '"').replace('{ ', '{').replace(' }', '}')  # Remove spaces around brackets
             response = response.strip('` \t\n\r')  # Remove any remaining backticks and whitespace
             
-            logger.debug(f"Cleaned response: {response}")
-            
             # Attempt to parse JSON with error handling
             try:
                 result = json.loads(response)
@@ -360,8 +350,6 @@ Return EXACTLY this structure on a SINGLE LINE (no line breaks, no spaces after 
                     response = re.sub(r'{\s*"', '{"', response)
                     result = json.loads(response)
                 except json.JSONDecodeError as e2:
-                    logger.error(f"JSON parsing failed after cleaning: {str(e2)}")
-                    logger.error(f"Response was: {response}")
                     raise ValueError("Failed to parse LLM response as JSON")
             
             # Process dates in the response
@@ -381,7 +369,6 @@ Return EXACTLY this structure on a SINGLE LINE (no line breaks, no spaces after 
                     # Store the datetime object directly
                     result["card"]["date"] = parsed_date
                 except ValueError as e:
-                    logger.error(f"Invalid date format in LLM response: {str(e)}")
                     result["card"]["date"] = "none"
             
             # Validate the response structure
@@ -402,7 +389,6 @@ Return EXACTLY this structure on a SINGLE LINE (no line breaks, no spaces after 
             return result
             
         except Exception as e:
-            logger.error(f"Failed to process note: {str(e)}")
             raise RuntimeError(f"Failed to process note: {str(e)}")
     
     def _parse_fallback_date(self, date_text: str) -> str:
@@ -459,7 +445,6 @@ Return EXACTLY this structure on a SINGLE LINE (no line breaks, no spaces after 
             return result["card"]["type"].upper()
             
         except:
-            logger.error("Failed to classify note")
             return "TASK"
 
     def extract_entities(self, text: str) -> Dict[str, Any]:
@@ -482,7 +467,6 @@ Return EXACTLY this structure on a SINGLE LINE (no line breaks, no spaces after 
                 "context_keywords": result["card"]["context_keywords"]
             }
         except:
-            logger.error("Failed to extract entities")
             return {
                 "description": text,
                 "date": None,
