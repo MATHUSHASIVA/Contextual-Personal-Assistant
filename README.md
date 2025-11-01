@@ -217,19 +217,6 @@ streamlit run app.py
 ```
 Then open your browser to `http://localhost:8501`
 
-**Option 2: Command-Line Interface**
-```bash
-# Process a single note
-python cli.py process "Call Sarah about the Q3 budget next Monday"
-
-# View all cards
-python cli.py list-cards
-
-# View all envelopes
-python cli.py list-envelopes
-
-# Get insights from Thinking Agent
-python cli.py insights
 ```
 
 ---
