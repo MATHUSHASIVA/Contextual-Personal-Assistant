@@ -1,7 +1,7 @@
 ## Contextual Personal Assistant
-<p align="center">
-      <img src="Image\Screenshot 2025-11-01 170435.png" alt="App Screenshot" width="700" />
-</p>
+
+<img src="Image\Screenshot 2025-11-01 170435.png" alt="App Screenshot" width="900" />
+
 This project is a sophisticated personal assistant system designed to transform unstructured text notes into organized, actionable knowledge using advanced AI agents. The assistant automatically processes your notes, extracts key information, and organizes it for easy access and proactive insights.
 
 ### Key features include:
@@ -170,9 +170,7 @@ Logical groupings of related Cards representing:
 
 The Thinking Agent analyzes the knowledge base to provide:
 
-<p align="center">
-      <img src="Image\Thinking_Agent_Screenshot 2025-11-02 161305.png" alt="Thinking_Agent_Screenshot" width="700" />
-</p>
+<img src="Image\Thinking_Agent_Screenshot 2025-11-02 161305.png" alt="Thinking_Agent_Screenshot" width="900" />
 
 1. **Next Steps**: Suggests logical follow-up actions based on card history
 2. **Recommendations**: Identifies patterns and optimization opportunities
