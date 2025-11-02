@@ -237,7 +237,6 @@ Then open your browser to `http://localhost:8501`
 
 ## 🚧 Future Enhancements
 
-- [ ] Multi-agent collaboration for complex task decomposition
 - [ ] Voice input integration for hands-free note taking
 - [ ] Mobile app interface for on-the-go capture
 - [ ] Bulk card operations (multi-select, batch status updates)
