@@ -2,11 +2,12 @@
 LLM integration module using Groq's Llama model
 """
 
+# Standard library imports
+import json
 import os
 import re
-import json
-from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 # Optional LLM imports
 if TYPE_CHECKING:
@@ -14,31 +15,28 @@ if TYPE_CHECKING:
 
 try:
     from langchain_groq import ChatGroq
-    from langchain.llms.base import LLM
     LLM_AVAILABLE = True
 except ImportError:
     LLM_AVAILABLE = False
     ChatGroq = None
-    LLM = None
 
 @dataclass
 class LLMConfig:
     """Configuration for LLM"""
     api_key: Optional[str] = None
-    model: str = "llama-3.3-70b-versatile"  # Default Groq model
+    model: str = "llama-3.3-70b-versatile"
     temperature: float = 0.1
-    max_tokens: int = 5000  # Token limit for Groq
+    max_tokens: int = 5000
     provider: str = "groq"
     
     def __init__(self, **kwargs):
-        # Load model from environment if available
         model_override = os.getenv("LLM_MODEL")
         if model_override:
             self.model = model_override
-        # Override any attributes with provided kwargs
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
 
 class LLMManager:
     """Manages LLM interactions using OpenRouter's Deepseek Chat model"""
@@ -51,7 +49,7 @@ class LLMManager:
             self._setup_client()
         else:
             self.client = None
-        
+    
     def _setup_client(self):
         """Initialize Groq Chat client"""
         if not LLM_AVAILABLE:

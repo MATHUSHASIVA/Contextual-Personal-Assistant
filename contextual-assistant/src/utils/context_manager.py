@@ -2,28 +2,33 @@
 Context Management System for maintaining dynamic user context
 """
 
-from typing import List, Dict, Any, Optional
+# Standard library imports
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
-from collections import defaultdict, Counter
+from typing import Any, Dict, List, Optional
 
-from ..storage.database import DatabaseManager, UserContext, Card, Envelope, Keyword
-from ..models.schemas import (
-    UserContextCreate, UserContextResponse, ContextType
-)
+# Third-party imports
+from sqlalchemy import desc, func
+from sqlalchemy.orm import Session
+
+# Local imports
+from ..models.schemas import ContextType, UserContextCreate, UserContextResponse
+from ..storage.database import Card, DatabaseManager, Envelope, Keyword, UserContext
 
 class ContextManager:
     """
     Manages dynamic user context including projects, companies, people, and themes
     """
     
+    # Category-specific indicators
+    GROCERY_INDICATORS = {'groceries', 'food', 'milk', 'bread', 'eggs', 'coffee', 'shopping'}
+    WORK_INDICATORS = {'meeting', 'project', 'review', 'deadline', 'report', 'presentation'}
+    TRAVEL_INDICATORS = {'flight', 'book', 'travel', 'ticket', 'conference'}
+    
     def __init__(self, database_url: str = None):
         self.db_manager = DatabaseManager(database_url or "sqlite:///./data/assistant.db")
-        
-        # Context decay parameters
-        self.relevance_decay_days = 30  # Days after which relevance starts decaying
-        self.min_relevance_threshold = 0.1  # Minimum relevance to keep context active
+        self.relevance_decay_days = 30
+        self.min_relevance_threshold = 0.1
     
     def get_current_context(self, limit_per_type: int = 10) -> Dict[str, List[UserContextResponse]]:
         """
@@ -210,11 +215,6 @@ class ContextManager:
             raise
         finally:
             session.close()
-    
-    # Category-specific indicators (simplified)
-    GROCERY_INDICATORS = {'groceries', 'food', 'milk', 'bread', 'eggs', 'coffee', 'shopping'}
-    WORK_INDICATORS = {'meeting', 'project', 'review', 'deadline', 'report', 'presentation'}
-    TRAVEL_INDICATORS = {'flight', 'book', 'travel', 'ticket', 'conference'}
     
     def get_context_for_text(self, text: str, limit: int = 5) -> List[UserContextResponse]:
         """

@@ -37,8 +37,9 @@ This project is a sophisticated personal assistant system designed to transform 
 **Interface: Streamlit**
 -  Rapid development and deployment
 -  Interactive widgets for data exploration
--  Built-in charting capabilities
+-  Built-in charting capabilities with Plotly (card trends, type distribution, status overview)
 -  Professional appearance with minimal code
+-  Real-time status updates with dropdown selectors for card management
 
 ## 🔄 Dual Processing Workflows
 
@@ -129,25 +130,6 @@ LLM Workflow      NLP Workflow
 
 
 ```
-
----
-
-## 📊 Data Models
-
-### Card Types
-- **Task**: Actionable items requiring completion (e.g., "Call John", "Buy groceries")
-- **Reminder**: Time-based alerts and notifications (e.g., "Meeting at 3pm", "Deadline Friday")
-- **Idea/Note**: General information and concept storage (e.g., "Blog post idea", "Design inspiration")
-
-### Envelopes
-Logical groupings of related Cards representing:
-- **Projects**: "Website Redesign", "Q4 Planning"
-- **Companies**: "Microsoft", "Client ABC"
-- **People**: "Sarah", "John Smith"
-- **Themes/Categories**: "Shopping", "Health", "Finance"
-
----
-
 ## 📁 Project Structure
 ```
 contextual-assistant/
@@ -159,11 +141,46 @@ contextual-assistant/
 │   └── utils/           # Utility functions            
 ├── data/                # Local data storage
 ├── app.py               # Streamlit web interface
-├── cli.py               # Command-line interface
 └── requirements.txt     # Dependencies
 ```
+---
+
+## 📊 Data Models
+
+### Card Types
+- **Task**: Actionable items requiring completion (e.g., "Call John", "Buy groceries")
+- **Reminder**: Time-based alerts and notifications (e.g., "Meeting at 3pm", "Deadline Friday")
+- **Idea/Note**: General information and concept storage (e.g., "Blog post idea", "Design inspiration")
+
+### Card Statuses
+Cards can have four different statuses that can be updated directly from the UI:
+- **Pending**: Newly created, not yet started
+- **In Progress**: Currently being worked on
+- **Completed**: Finished successfully
+- **Cancelled**: No longer needed or relevant
+
+### Envelopes
+Logical groupings of related Cards representing:
+- **Projects**: "Website Redesign", "Q4 Planning"
+- **Companies**: "Microsoft", "Client ABC"
+- **People**: "Sarah", "John Smith"
+- **Themes/Categories**: "Shopping", "Health", "Finance"
+
+## 🧠 Thinking Agent Design
+
+The Thinking Agent analyzes the knowledge base to provide:
+
+<p align="center">
+      <img src="Image\Thinking_Agent_Screenshot 2025-11-02 161305.png" alt="Thinking_Agent_Screenshot" width="700" />
+</p>
+
+1. **Next Steps**: Suggests logical follow-up actions based on card history
+2. **Recommendations**: Identifies patterns and optimization opportunities
+3. **Conflict Detection**: Finds scheduling conflicts and resource overlaps
+4. **Context Refinement**: Updates user context based on usage patterns
 
 
+---
 
 ---
 
@@ -210,39 +227,22 @@ USE_LOCAL_ONLY=false
 
 ### Running the Application
 
-**Option 1: Web Interface (Streamlit)**
+**Web Interface (Streamlit)**
 ```bash
 # Start the Streamlit web interface
 streamlit run app.py
 ```
 Then open your browser to `http://localhost:8501`
 
-```
-
 ---
 
-## 🧠 Thinking Agent Design
-
-The Thinking Agent analyzes the knowledge base to provide:
-
-1. **Next Steps**: Suggests logical follow-up actions based on card history
-2. **Recommendations**: Identifies patterns and optimization opportunities
-3. **Conflict Detection**: Finds scheduling conflicts and resource overlaps
-4. **Context Refinement**: Updates user context based on usage patterns
-
-### Analysis Pipeline
-```
-Cards & Envelopes → Pattern Analysis → Cross-Reference → Generate Insights → Update Context
-```
-
----
 
 ## 🚧 Future Enhancements
 
 - [ ] Multi-agent collaboration for complex task decomposition
 - [ ] Voice input integration for hands-free note taking
 - [ ] Mobile app interface for on-the-go capture
-- [ ] Advanced analytics dashboard with visualizations
+- [ ] Bulk card operations (multi-select, batch status updates)
 - [ ] Team collaboration features (shared envelopes, assignments)
 - [ ] Integration with external tools (Google Calendar, Outlook, Slack)
 - [ ] Smart notifications based on context and priority

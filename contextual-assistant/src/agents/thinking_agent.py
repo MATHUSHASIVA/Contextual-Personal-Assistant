@@ -2,28 +2,27 @@
 Thinking Agent for proactive analysis and intelligent suggestions using LLM
 """
 
+# Standard library imports
+import json
+import logging
 import os
 import re
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, or_, exists
-import logging
 from dataclasses import dataclass
-import json
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
-from ..storage.database import (
-    DatabaseManager, Card, Envelope, UserContext, 
-    ThinkingInsight, Keyword
-)
-from ..models.schemas import (
-    ThinkingInsightCreate, ThinkingInsightResponse, 
-    InsightType, CardType, Status
-)
-from ..utils.llm_manager import LLMManager, LLMConfig
+# Third-party imports
+from sqlalchemy import desc, or_
+from sqlalchemy.orm import Session
+
+# Local imports
+from ..models.schemas import InsightType, ThinkingInsightCreate
+from ..storage.database import Card, DatabaseManager, Envelope, ThinkingInsight, UserContext
+from ..utils.llm_manager import LLMConfig, LLMManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class AnalysisConfig:
@@ -32,6 +31,7 @@ class AnalysisConfig:
     min_pattern_frequency: int = 2
     conflict_detection_days: int = 14
     max_insights_per_run: int = 20
+
 
 class ThinkingAgent:
     """

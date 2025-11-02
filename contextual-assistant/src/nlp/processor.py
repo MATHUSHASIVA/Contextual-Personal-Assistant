@@ -2,15 +2,17 @@
 NLP processing components for entity extraction and text classification
 """
 
+# Standard library imports
 import re
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
-import dateparser
-import numpy as np
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+# Third-party imports
+import dateparser
 import spacy
 
-# ML imports - with try-except for optional dependencies  
+# Optional ML imports
 try:
     from sentence_transformers import SentenceTransformer
     from sklearn.metrics.pairwise import cosine_similarity
@@ -22,17 +24,17 @@ except ImportError:
 
 # Optional fuzzy matching imports
 try:
-    from fuzzywuzzy import fuzz, process
+    from fuzzywuzzy import process
     FUZZY_AVAILABLE = True
 except (ImportError, ValueError):
     FUZZY_AVAILABLE = False
-    fuzz = None
     process = None
 
+# Local imports
 from ..models.schemas import (
-    EntityExtractionResult, 
-    ClassificationResult, 
     CardType,
+    ClassificationResult,
+    EntityExtractionResult,
     EnvelopeMatchResult,
     EnvelopeType
 )
@@ -44,6 +46,7 @@ class NLPConfig:
     sentence_transformer_model: str = "all-MiniLM-L6-v2"
     envelope_similarity_threshold: float = 0.7
     max_keywords: int = 5
+
 
 class EntityExtractor:
     """
@@ -216,6 +219,7 @@ class EntityExtractor:
         keywords = list(set(keywords))[:self.config.max_keywords]
         return keywords
 
+
 class CardClassifier:
     """
     Classifies text into card types (Task, Reminder, Idea)
@@ -314,6 +318,7 @@ class CardClassifier:
             reasons.append(f"Key topics: {', '.join(entities.keywords[:3])}")
         
         return "; ".join(reasons)
+
 
 class EnvelopeMatcher:
     """

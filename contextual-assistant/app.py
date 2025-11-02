@@ -2,17 +2,18 @@
 Streamlit Web Interface for the Contextual Personal Assistant
 """
 
-from dotenv import load_dotenv
-load_dotenv()  # Load environment variables from .env file
-
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import json
+# Standard library imports
 import os
+from datetime import datetime, timedelta
 from pathlib import Path
+
+# Third-party imports
+from dotenv import load_dotenv
+import plotly.graph_objects as go
+import streamlit as st
+
+# Load environment variables
+load_dotenv()
 
 # Configure page
 st.set_page_config(
@@ -22,13 +23,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Import our components
+# Local imports
 try:
     from src.agents.ingestion_agent import IngestionAgent
     from src.agents.thinking_agent import ThinkingAgent
-    from src.utils.context_manager import ContextManager
-    from src.storage.database import DatabaseManager, Card, Envelope, UserContext, ThinkingInsight
     from src.models.schemas import CardType, Status
+    from src.storage.database import Card, DatabaseManager, Envelope, ThinkingInsight, UserContext
+    from src.utils.context_manager import ContextManager
 except ImportError as e:
     st.error(f"Import error: {e}")
     st.error("Make sure you're running from the project root directory")
@@ -65,6 +66,22 @@ def get_database_session():
     db_manager = DatabaseManager(database_url=f"sqlite:///{database_path}")
     return db_manager.get_session()
 
+# Emoji mapping constants
+CARD_TYPE_EMOJI_UPPER = {"TASK": "🎯", "REMINDER": "🔔", "IDEA": "💡"}
+CARD_TYPE_EMOJI_LOWER = {"task": "🎯", "reminder": "🔔", "idea": "💡"}
+STATUS_EMOJI = {
+    "pending": "⏳",
+    "in_progress": "🔄", 
+    "completed": "✅",
+    "cancelled": "❌"
+}
+INSIGHT_TYPE_COLORS = {
+    "next_step": "🟢",
+    "recommendation": "🔵", 
+    "conflict": "🔴",
+    "optimization": "🟡"
+}
+
 def main():
     """Main Streamlit application"""
     
@@ -88,6 +105,16 @@ def main():
     
     # Sidebar navigation
     st.sidebar.title("Navigation")
+    
+    # Show workflow status in sidebar
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if groq_api_key:
+        st.sidebar.success("🤖 LLM Mode Active")
+    else:
+        st.sidebar.info("🔧 NLP Mode Active")
+    
+    st.sidebar.markdown("---")
+    
     page = st.sidebar.selectbox(
         "Choose a page",
         ["📝 Process Notes", "📋 View Cards", "📁 Envelopes", "🧠 Context", "💡 Insights", "📊 Analytics"]
@@ -98,9 +125,9 @@ def main():
         process_notes_page()
     elif page == "📋 View Cards":
         view_cards_page()
-    elif page == "📁 View Envelopes":
+    elif page == "📁 Envelopes":
         envelopes_page()
-    elif page == "🧠 Context Management":
+    elif page == "🧠 Context":
         context_page()
     elif page == "💡 Insights":
         insights_page()
@@ -109,7 +136,15 @@ def main():
 
 def process_notes_page():
     """Page for processing new notes"""
+    # Show current workflow mode at the top
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if groq_api_key:
+        st.info("🤖 **Active Mode:** LLM-Powered Workflow (Groq Llama 3.3 70B)")
+    else:
+        st.warning("🔧 **Active Mode:** NLP Fallback Workflow (spaCy + Pattern Matching)")
+    
     st.header("📝 Process New Notes")
+    
     st.markdown("Enter your thoughts, ideas, or tasks below and watch them get organized automatically!")
     
     # Input form
@@ -194,26 +229,6 @@ def process_notes_page():
                     
             except Exception as e:
                 st.error(f"❌ Error processing note: {str(e)}")
-    
-    # Quick examples
-    st.markdown("---")
-    st.subheader("💡 Try these examples:")
-    
-    examples = [
-        "Call Sarah about the Q3 budget next Monday",
-        "Remember to pick up milk on the way home",
-        "Idea: new logo should be blue and green",
-        "Schedule meeting with the design team for project Alpha",
-        "Buy groceries: bread, eggs, coffee",
-        "Research competitors for the marketing campaign"
-    ]
-    
-    cols = st.columns(2)
-    for i, example in enumerate(examples):
-        col = cols[i % 2]
-        with col:
-            if st.button(f"📝 {example}", key=f"example_{i}"):
-                st.rerun()
 
 def view_cards_page():
     """Page for viewing existing cards"""
@@ -258,50 +273,76 @@ def view_cards_page():
         cards = query.order_by(Card.created_at.desc()).limit(limit).all()
         
         if cards:
-            # Convert to DataFrame for display
-            card_data = []
+            # Build table data
+            table_rows = []
             for card in cards:
-                card_data.append({
-                    "ID": card.id,
-                    "Type": card.card_type.title(),
-                    "Description": card.description,
+                desc = card.description if card.description else "-"
+                # Show full description without truncation
+                
+                keywords = ", ".join([kw.word for kw in card.keywords]) if card.keywords else "-"
+                
+                table_rows.append({
+                    "ID": f"#{card.id}",
+                    "Type": card.card_type.upper(),
+                    "Description": desc,
                     "Status": card.status.replace('_', ' ').title(),
-                    "Assignee": card.assignee.title() if card.assignee else "-",
+                    "Assignee": card.assignee if card.assignee else "-",
                     "Due Date": card.due_date.strftime('%Y-%m-%d') if card.due_date else "-",
-                    "Created": card.created_at.strftime('%Y-%m-%d %H:%M'),
-                    "Keywords": ", ".join([kw.word for kw in card.keywords]) if card.keywords else "-"
+                    "Envelope": card.envelope.name if card.envelope else "-",
+                    "Keywords": keywords,
+                    "Created": card.created_at.strftime('%Y-%m-%d %H:%M')
                 })
             
-            df = pd.DataFrame(card_data)
+            # Display using custom table layout (no pandas)
+            # Header row
+            st.markdown("### 📋 Cards Table")
+            header_cols = st.columns([1, 2, 5, 2, 2, 2, 2, 3, 2, 2])
+            headers = ["ID", "Type", "Description", "Status", "Assignee", "Due Date", "Envelope", "Keywords", "Created", "Action"]
+            for col, header in zip(header_cols, headers):
+                col.markdown(f"**{header}**")
             
-            # Display cards
-            st.dataframe(
-                df,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Description": st.column_config.TextColumn(width="large"),
-                    "Keywords": st.column_config.TextColumn(width="medium")
-                }
-            )
+            st.markdown("---")
             
-            # Card details modal
-            if st.button("🔍 View Card Details"):
-                card_id = st.number_input("Enter Card ID", min_value=1, value=cards[0].id)
-                selected_card = session.query(Card).get(card_id)
+            # Data rows with status update
+            for idx, row in enumerate(table_rows):
+                cols = st.columns([1, 2, 5, 2, 2, 2, 2, 3, 2, 2])
                 
-                if selected_card:
-                    st.json({
-                        "id": selected_card.id,
-                        "content": selected_card.content,
-                        "description": selected_card.description,
-                        "card_type": selected_card.card_type,
-                        "status": selected_card.status,
-                        "assignee": selected_card.assignee,
-                        "due_date": selected_card.due_date.isoformat() if selected_card.due_date else None,
-                        "location": selected_card.location,
-                        "additional_entities": selected_card.get_additional_entities()
-                    })
+                # Color code the ID based on type
+                emoji = CARD_TYPE_EMOJI_UPPER.get(row["Type"], "📝")
+                
+                cols[0].write(f"{emoji} {row['ID']}")
+                cols[1].write(row["Type"])
+                cols[2].write(row["Description"])
+                cols[3].write(row["Status"])
+                cols[4].write(row["Assignee"])
+                cols[5].write(row["Due Date"])
+                cols[6].write(row["Envelope"])
+                cols[7].write(row["Keywords"][:30] + "..." if len(row["Keywords"]) > 30 else row["Keywords"])
+                cols[8].write(row["Created"])
+                
+                # Status update dropdown
+                card_id = int(row["ID"].replace("#", ""))
+                status_options = ["Pending", "In Progress", "Completed", "Cancelled"]
+                current_status = row["Status"]
+                
+                new_status = cols[9].selectbox(
+                    "Update",
+                    options=status_options,
+                    index=status_options.index(current_status) if current_status in status_options else 0,
+                    key=f"status_{card_id}_{idx}",
+                    label_visibility="collapsed"
+                )
+                
+                # Update status if changed
+                if new_status != current_status:
+                    card_to_update = session.query(Card).filter(Card.id == card_id).first()
+                    if card_to_update:
+                        card_to_update.status = new_status.lower().replace(' ', '_')
+                        session.commit()
+                        st.success(f"✅ Card #{card_id} status updated to {new_status}")
+                        st.rerun()
+                
+                st.markdown("---")
         else:
             st.info("No cards found matching the selected criteria.")
     
@@ -344,14 +385,9 @@ def envelopes_page():
                         if envelope_cards:
                             st.write("**Recent Cards:**")
                             for card in envelope_cards:
-                                status_emoji = {
-                                    "pending": "⏳",
-                                    "in_progress": "🔄", 
-                                    "completed": "✅",
-                                    "cancelled": "❌"
-                                }.get(card.status, "📋")
-                                
-                                st.write(f"{status_emoji} {card.description[:50]}...")
+                                emoji = STATUS_EMOJI.get(card.status, "📋")
+                                # Show full description without truncation
+                                st.write(f"{emoji} {card.description}")
         else:
             st.info("No active envelopes found.")
     
@@ -373,38 +409,60 @@ def context_page():
                 
                 with tab1:
                     if analysis["most_active_people"]:
-                        people_df = pd.DataFrame(analysis["most_active_people"])
-                        st.dataframe(people_df, use_container_width=True, hide_index=True)
+                        st.write("**Most Active People:**")
+                        for item in analysis["most_active_people"]:
+                            cols = st.columns([3, 2, 2])
+                            cols[0].write(str(item.get("name", "-")))
+                            cols[1].write(f"Cards: {item.get('card_count', 0)}")
+                            cols[2].write(f"Relevance: {item.get('relevance_score', 0):.2f}")
+                            st.markdown("---")
                     else:
                         st.info("No active people found in context.")
                 
                 with tab2:
                     if analysis["trending_themes"]:
-                        themes_df = pd.DataFrame(analysis["trending_themes"])
-                        fig = px.bar(themes_df, x="theme", y="frequency", title="Trending Themes")
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.write("**Trending Themes:**")
+                        for item in analysis["trending_themes"]:
+                            cols = st.columns([3, 2])
+                            cols[0].write(str(item.get("theme", "-")))
+                            cols[1].write(f"Frequency: {item.get('frequency', 0)}")
+                            st.markdown("---")
                     else:
                         st.info("No trending themes found.")
                 
                 with tab3:
                     if analysis["active_projects"]:
-                        projects_df = pd.DataFrame(analysis["active_projects"])
-                        st.dataframe(projects_df, use_container_width=True, hide_index=True)
+                        st.write("**Active Projects:**")
+                        for item in analysis["active_projects"]:
+                            cols = st.columns([3, 2, 2])
+                            cols[0].write(str(item.get("name", "-")))
+                            cols[1].write(f"Activity: {item.get('recent_activity', 0)}")
+                            cols[2].write(f"Relevance: {item.get('relevance_score', 0):.2f}")
+                            st.markdown("---")
                     else:
                         st.info("No active projects found in context.")
                 
                 with tab4:
                     evolution = analysis["context_evolution"]
-                    col1, col2, col3, col4 = st.columns(4)
+                    col1, col2, col3 = st.columns(3)
                     
                     with col1:
-                        st.metric("Total Contexts", evolution["total_contexts"])
+                        st.metric("Total Contexts", evolution.get("total_contexts", 0))
                     with col2:
-                        st.metric("Monthly New", evolution["monthly_new"])
+                        monthly = sum(evolution.get("contexts_by_type", {}).get("monthly", {}).values())
+                        st.metric("Monthly New", monthly)
                     with col3:
-                        st.metric("Weekly New", evolution["weekly_new"])
-                    with col4:
-                        st.metric("Growth Rate", f"{evolution['growth_rate']:.1f}%")
+                        recent = sum(evolution.get("contexts_by_type", {}).get("recent", {}).values())
+                        st.metric("Recent (7d)", recent)
+                    
+                    # Show trending categories if available
+                    if evolution.get("trending_categories"):
+                        st.write("**📈 Trending Categories:**")
+                        for cat in evolution["trending_categories"][:3]:
+                            cols = st.columns([3, 2, 2])
+                            cols[0].write(cat.get("type", "-").title())
+                            cols[1].write(f"Growth: {cat.get('growth_rate', 0):.1f}%")
+                            cols[2].write(f"Score: {cat.get('trend_score', 0):.1f}")
                         
             except Exception as e:
                 st.error(f"Error analyzing context: {str(e)}")
@@ -417,18 +475,22 @@ def context_page():
         
         for context_type, contexts in current_context.items():
             if contexts:
-                st.write(f"**{context_type.title()}:**")
+                st.write(f"**{str(context_type).title()}:**")
                 
-                context_data = []
+                # Header
+                cols = st.columns([4, 2, 3])
+                cols[0].markdown("**Name**")
+                cols[1].markdown("**Relevance**")
+                cols[2].markdown("**Last Referenced**")
+                st.markdown("---")
+                
+                # Data rows
                 for context in contexts:
-                    context_data.append({
-                        "Name": context.name.title(),
-                        "Relevance": f"{context.relevance_score:.2f}",
-                        "Last Referenced": context.last_referenced.strftime('%Y-%m-%d')
-                    })
+                    cols = st.columns([4, 2, 3])
+                    cols[0].write(str(context.name).title())
+                    cols[1].write(f"{float(context.relevance_score):.2f}")
+                    cols[2].write(context.last_referenced.strftime('%Y-%m-%d'))
                 
-                df = pd.DataFrame(context_data)
-                st.dataframe(df, use_container_width=True, hide_index=True)
                 st.write("")
     
     except Exception as e:
@@ -475,16 +537,9 @@ def insights_page():
         
         if insights:
             for insight in insights:
-                # Choose styling based on insight type
-                type_colors = {
-                    "next_step": "🟢",
-                    "recommendation": "🔵", 
-                    "conflict": "🔴",
-                    "optimization": "🟡"
-                }
                 # Handle both enum and string types
                 insight_type_str = insight.insight_type.value if hasattr(insight.insight_type, 'value') else insight.insight_type
-                color = type_colors.get(insight_type_str, "⚫")
+                color = INSIGHT_TYPE_COLORS.get(insight_type_str, "⚫")
                 
                 # Create insight card
                 with st.container():
@@ -496,6 +551,22 @@ def insights_page():
                         st.write(insight.description)
                         if insight.suggested_action:
                             st.info(f"💡 **Suggested Action:** {insight.suggested_action}")
+                        
+                        # Show related cards with their actual content
+                        related_card_ids = insight.get_related_card_ids()
+                        
+                        if related_card_ids:
+                            st.markdown("**📝 Related Cards:**")
+                            session = get_database_session()
+                            try:
+                                for card_id in related_card_ids[:5]:  # Limit to 5 cards
+                                    card = session.query(Card).filter(Card.id == card_id).first()
+                                    if card:
+                                        # Show card with emoji based on type
+                                        emoji = CARD_TYPE_EMOJI_LOWER.get(card.card_type, "📝")
+                                        st.markdown(f"- {emoji} {card.description}")
+                            finally:
+                                session.close()
                     
                     with col2:
                         # Handle both enum and string types  
@@ -562,14 +633,15 @@ def analytics_page():
             ).group_by(func.date(Card.created_at)).order_by('date').all()
             
             if cards_over_time:
-                dates = [item.date for item in cards_over_time]
-                counts = [item.count for item in cards_over_time]
+                dates = [str(item.date) for item in cards_over_time]
+                counts = [int(item.count) for item in cards_over_time]
                 
-                # Create DataFrame for plotly
-                df_timeline = pd.DataFrame({'Date': dates, 'Count': counts})
-                
-                fig = px.line(df_timeline, x='Date', y='Count', title="Cards Created Over Time")
-                fig.update_layout(xaxis_title="Date", yaxis_title="Cards Created")
+                fig = go.Figure(data=go.Scatter(x=dates, y=counts, mode='lines+markers'))
+                fig.update_layout(
+                    title="Cards Created Over Time",
+                    xaxis_title="Date",
+                    yaxis_title="Cards Created"
+                )
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No card creation data available.")
@@ -582,10 +654,11 @@ def analytics_page():
             ).group_by(Card.card_type).all()
             
             if card_types:
-                types = [item.card_type.title() for item in card_types]
-                counts = [item.count for item in card_types]
+                types = [str(item.card_type).title() for item in card_types]
+                counts = [int(item.count) for item in card_types]
                 
-                fig = px.pie(values=counts, names=types, title="Card Type Distribution")
+                fig = go.Figure(data=go.Pie(labels=types, values=counts))
+                fig.update_layout(title="Card Type Distribution")
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No card type data available.")
@@ -598,14 +671,15 @@ def analytics_page():
             ).group_by(Card.status).all()
             
             if statuses:
-                status_names = [item.status.replace('_', ' ').title() for item in statuses]
-                status_counts = [item.count for item in statuses]
+                status_names = [str(item.status).replace('_', ' ').title() for item in statuses]
+                status_counts = [int(item.count) for item in statuses]
                 
-                # Create DataFrame for plotly
-                df_status = pd.DataFrame({'Status': status_names, 'Count': status_counts})
-                
-                fig = px.bar(df_status, x='Status', y='Count', title="Card Status Distribution")
-                fig.update_layout(xaxis_title="Status", yaxis_title="Count")
+                fig = go.Figure(data=go.Bar(x=status_names, y=status_counts))
+                fig.update_layout(
+                    title="Card Status Distribution",
+                    xaxis_title="Status",
+                    yaxis_title="Count"
+                )
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("No status data available.")
@@ -615,16 +689,26 @@ def analytics_page():
             recent_cards = session.query(Card).order_by(Card.created_at.desc()).limit(20).all()
             
             if recent_cards:
-                timeline_data = []
-                for card in recent_cards:
-                    timeline_data.append({
-                        "Date": card.created_at.strftime('%Y-%m-%d %H:%M'),
-                        "Type": card.card_type.title(),
-                        "Description": card.description[:50] + "..." if len(card.description) > 50 else card.description
-                    })
+                st.write("**Recent Activity Timeline:**")
                 
-                df = pd.DataFrame(timeline_data)
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                # Header
+                cols = st.columns([3, 2, 7])
+                cols[0].markdown("**Date**")
+                cols[1].markdown("**Type**")
+                cols[2].markdown("**Description**")
+                st.markdown("---")
+                
+                # Data rows
+                for card in recent_cards:
+                    cols = st.columns([3, 2, 7])
+                    cols[0].write(card.created_at.strftime('%Y-%m-%d %H:%M'))
+                    
+                    # Add emoji for type
+                    emoji = CARD_TYPE_EMOJI_LOWER.get(card.card_type, "📝")
+                    cols[1].write(f"{emoji} {card.card_type.title()}")
+                    
+                    # Show full description
+                    cols[2].write(card.description)
             else:
                 st.info("No recent activity data available.")
     

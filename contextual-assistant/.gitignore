@@ -86,7 +86,6 @@ celerybeat-schedule
 
 # Environments
 .env
-.env.example
 .venv
 env/
 venv/
@@ -130,7 +129,3 @@ temp/
 tmp/
 *.tmp
 
-# Exclude specific files
-demo.py
-cli.py
-setup.py

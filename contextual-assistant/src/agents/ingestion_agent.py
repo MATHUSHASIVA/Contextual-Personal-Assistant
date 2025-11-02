@@ -1,21 +1,30 @@
-import os
-import logging
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+# Standard library imports
 import json
+import logging
+import os
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
+# Third-party imports
+from sqlalchemy import func, text
+from sqlalchemy.orm import Session
+
+# Local imports
 from ..models.schemas import (
-    ProcessingResult, CardCreate, CardEntity, CardResponse, 
-    EnvelopeCreate, EnvelopeResponse, CardType, Status
+    CardResponse,
+    CardType,
+    EnvelopeResponse,
+    EnvelopeType,
+    ProcessingResult,
+    Status
 )
 from ..nlp.processor import NLPPipeline
-from ..storage.database import DatabaseManager, Card, Envelope, Keyword, UserContext
-from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from ..storage.database import Card, DatabaseManager, Envelope, Keyword, UserContext
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)  # Set to WARNING to reduce output
+logger.setLevel(logging.WARNING)
+
 
 class IngestionAgent:
     """
@@ -23,7 +32,6 @@ class IngestionAgent:
     """
     
     def __init__(self, database_url: str = None, groq_api_key: str = None):
-        # Load environment variables if not already loaded
         from dotenv import load_dotenv
         load_dotenv()
         
@@ -112,8 +120,6 @@ class IngestionAgent:
         
         logger.warning("⚠️ Falling back to local NLP processing")
         self.llm = None
-    
-
     
     def process_note(self, note_text: str) -> ProcessingResult:
         """
@@ -289,17 +295,25 @@ class IngestionAgent:
     
     def _get_existing_envelopes(self, session: Session) -> List[Dict[str, Any]]:
         """Get existing envelopes for matching"""
+        from sqlalchemy import func
         envelopes = session.query(Envelope).filter(Envelope.is_active == True).all()
         
         result = []
         for envelope in envelopes:
             keywords = [kw.word for kw in envelope.keywords]
+            # Count cards in this envelope
+            card_count = session.query(func.count(Card.id)).filter(Card.envelope_id == envelope.id).scalar() or 0
+            
             result.append({
                 "id": envelope.id,
                 "name": envelope.name,
                 "description": envelope.description,
                 "envelope_type": envelope.envelope_type,
-                "keywords": keywords
+                "keywords": keywords,
+                "card_count": card_count,
+                "created_at": envelope.created_at,
+                "updated_at": envelope.updated_at,
+                "is_active": envelope.is_active
             })
         
         return result
@@ -450,7 +464,12 @@ class IngestionAgent:
             
         elif envelope_match.matched_envelope:
             # Use existing envelope
-            envelope_id = envelope_match.matched_envelope["id"]
+            # Handle both dict and Pydantic model
+            if isinstance(envelope_match.matched_envelope, dict):
+                envelope_id = envelope_match.matched_envelope["id"]
+            else:
+                envelope_id = envelope_match.matched_envelope.id
+            
             envelope = session.query(Envelope).get(envelope_id)
             
             # Update envelope keywords
@@ -574,8 +593,6 @@ class IngestionAgent:
         self._add_keywords_to_card(session, card, entities.keywords)
         
         return card
-    
-    # Priority system removed
     
     def _create_description(self, text: str, entities) -> str:
         """Create a clean description from the raw text"""

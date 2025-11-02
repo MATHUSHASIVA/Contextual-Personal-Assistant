@@ -2,21 +2,46 @@
 Database schema and models for the Contextual Personal Assistant
 """
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Float, ForeignKey, Table, Boolean, event, inspect
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker, object_session
-from datetime import datetime
+# Standard library imports
 import json
+from datetime import datetime
+
+# Third-party imports
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Text,
+    create_engine,
+    event,
+    inspect
+)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import object_session, relationship, sessionmaker
 
 Base = declarative_base()
 
-# Association table for many-to-many relationship between Cards and Keywords
+
+# Association tables for many-to-many relationships
 card_keywords = Table(
     'card_keywords',
     Base.metadata,
     Column('card_id', Integer, ForeignKey('cards.id')),
     Column('keyword_id', Integer, ForeignKey('keywords.id'))
 )
+
+envelope_keywords = Table(
+    'envelope_keywords',
+    Base.metadata,
+    Column('envelope_id', Integer, ForeignKey('envelopes.id')),
+    Column('keyword_id', Integer, ForeignKey('keywords.id'))
+)
+
 
 class Card(Base):
     """
@@ -54,6 +79,7 @@ class Card(Base):
     def set_additional_entities(self, entities_dict):
         """Store additional entities as JSON"""
         self.additional_entities = json.dumps(entities_dict)
+
 
 class Envelope(Base):
     """
@@ -93,13 +119,6 @@ class Envelope(Base):
         if session:
             self.card_count = session.query(Card).filter(Card.envelope_id == self.id).count()
 
-# Association table for many-to-many relationship between Envelopes and Keywords
-envelope_keywords = Table(
-    'envelope_keywords',
-    Base.metadata,
-    Column('envelope_id', Integer, ForeignKey('envelopes.id')),
-    Column('keyword_id', Integer, ForeignKey('keywords.id'))
-)
 
 class Keyword(Base):
     """
@@ -115,8 +134,8 @@ class Keyword(Base):
     # Relationships
     cards = relationship("Card", secondary=card_keywords, back_populates="keywords")
     envelopes = relationship("Envelope", secondary=envelope_keywords, back_populates="keywords")
-    
     created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class UserContext(Base):
     """
@@ -151,6 +170,7 @@ class UserContext(Base):
         """Store context data as JSON"""
         self.context_data = json.dumps(data_dict)
 
+
 class ProcessingLog(Base):
     """
     Log of processing activities for debugging and analytics
@@ -170,6 +190,7 @@ class ProcessingLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     success = Column(Boolean, default=True)
     error_message = Column(Text)
+
 
 class ThinkingInsight(Base):
     """
@@ -213,7 +234,7 @@ class ThinkingInsight(Base):
         """Store related envelope IDs as JSON"""
         self.related_envelope_ids = json.dumps(envelope_ids)
 
-# Database initialization and utility functions
+
 class DatabaseManager:
     """
     Manages database connections and operations
